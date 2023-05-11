@@ -93,7 +93,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 			if (user && user.name && !user.company) {
 				// update the user's company
-				await User.findOneAndUpdate({ phone: from }, { company: msg_body });
+				await User.findOneAndUpdate({ phone: from }, { companyName: msg_body });
 
 				// send a thank you message for providing the information
 				await sendMessage(phone_number_id, from, 'text', {
