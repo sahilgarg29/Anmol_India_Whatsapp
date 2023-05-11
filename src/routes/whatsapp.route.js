@@ -4,8 +4,8 @@ const whatsappController = require('../controllers/whatsapp.controller');
 const router = express.Router();
 
 router
-	.route('/')
-	.get(whatsappController.getAllWhatsapps)
-	.post(whatsappController.createWhatsapp);
+	.route('/webhook')
+	.get(whatsappController.getWebhook)
+	.post(whatsappController.postWebhook);
 
 module.exports = router;
