@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema(
 			type: String,
 		},
 
-		mobile: {
+		phone: {
 			type: String,
 			required: [true, 'Mobile number is required'],
 			unique: [true, 'mobile number already exists'],
