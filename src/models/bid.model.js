@@ -9,7 +9,7 @@ const bidSchema = new mongoose.Schema(
 		},
 		type: {
 			type: String,
-			enum: ['buy', 'sell'],
+			enum: ['BUY', 'SELL'],
 			required: [true, 'Type is required'],
 		},
 		coal: {

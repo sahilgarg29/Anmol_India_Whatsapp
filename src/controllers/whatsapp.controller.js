@@ -93,7 +93,10 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 			if (user && user.name && !user.company) {
 				// update the user's company
-				await User.findOneAndUpdate({ phone: from }, { companyName: msg_body });
+				user = await User.findOneAndUpdate(
+					{ phone: from },
+					{ companyName: msg_body }
+				);
 
 				// send a thank you message for providing the information
 				await sendMessage(phone_number_id, from, 'text', {
@@ -129,7 +132,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				});
 			}
 
-			if (user && user.name && user.company) {
+			if (user && user.name && user.companyName) {
 				// check if the user has placed a bid before
 				let bids = await Bid.find({ user: user._id });
 
