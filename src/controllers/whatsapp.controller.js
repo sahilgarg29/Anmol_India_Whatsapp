@@ -93,9 +93,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					preview_url: false,
 					body: `Hi ${user.name}, what is your company name?`,
 				});
-			}
-
-			if (user && user.name && !user.companyName) {
+			} else if (user && user.name && !user.companyName) {
 				// update the user's company
 				user = await User.findOneAndUpdate(
 					{ phone: from },
@@ -135,9 +133,12 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						],
 					},
 				});
-			}
-
-			if (user && user.name && user.companyName && !user.stage === 'Vessels') {
+			} else if (
+				user &&
+				user.name &&
+				user.companyName &&
+				!user.stage === 'Vessels'
+			) {
 				// check if the user has placed a bid before
 				let bids = await Bid.find({ user: user._id });
 
