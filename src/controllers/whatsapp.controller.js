@@ -3,7 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const User = require('../models/user.model');
 const Bid = require('../models/bid.model');
 const Vessel = require('../models/vessel.model');
-
+const Coal = require('../models/coal.model');
 // Access token for your app
 const token = process.env.WHATSAPP_TOKEN;
 
@@ -132,7 +132,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				});
 			}
 
-			if (user && user.name && user.companyName) {
+			if (user && user.name && user.companyName && user.stage === 'start') {
 				// check if the user has placed a bid before
 				let bids = await Bid.find({ user: user._id });
 
@@ -175,6 +175,28 @@ exports.postWebhook = catchAsync(async (req, res) => {
 							],
 						},
 					});
+
+					user.stage = 'Vessels';
+					await user.save();
+				}
+
+				if (user.stage === 'Vessels') {
+					let coal = await Coal.findOne({
+						vessel: msg_body,
+					}).populate('port vessel country');
+
+					if (!coal) {
+						await sendMessage(phone_number_id, from, 'text', {
+							preview_url: false,
+							body: `No coal available for the selected vessel`,
+						});
+					} else {
+						await sendMessage(phone_number_id, from, 'text', {
+							preview_url: false,
+							body: `Port - ${coal.port.name}\n\n
+              COuntry - ${coal.country.name}\n\Indicative Price - ${coal.indicativePrice}\n\n}`,
+						});
+					}
 				}
 			}
 		}
