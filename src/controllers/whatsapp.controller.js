@@ -50,15 +50,16 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 				// send a welcome message
 
-				await sendMessage(
-					phone_number_id,
-					from,
-					'text',
-					'Welcome to our service!'
-				);
+				await sendMessage(phone_number_id, from, 'text', {
+					preview_url: false,
+					body: 'Welcome to the WhatsApp bot!',
+				});
 
 				// send a message to ask for the user's name
-				await sendMessage(phone_number_id, from, 'text', 'What is your name?');
+				await sendMessage(phone_number_id, from, 'text', {
+					preview_url: false,
+					body: 'What is your name?',
+				});
 			}
 
 			if (user && !user.name) {
@@ -67,12 +68,10 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				await User.findOneAndUpdate({ phone: from }, { name: msg_body });
 
 				// send a message to ask for company name
-				await sendMessage(
-					phone_number_id,
-					from,
-					'text',
-					'What is your company name?'
-				);
+				await sendMessage(phone_number_id, from, 'text', {
+					preview_url: false,
+					body: `Hi ${user.name}, what is your company name?`,
+				});
 			}
 
 			if (user && user.name && !user.company) {
@@ -80,12 +79,10 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				await User.findOneAndUpdate({ phone: from }, { company: msg_body });
 
 				// send a thank you message for providing the information
-				await sendMessage(
-					phone_number_id,
-					from,
-					'text',
-					`Thanks ${user.name} for providing the information!`
-				);
+				await sendMessage(phone_number_id, from, 'text', {
+					preview_url: false,
+					body: `Thank you ${user.name} for providing your company name!`,
+				});
 
 				// send a button message to ask placeing bid type (buy or sell)
 
