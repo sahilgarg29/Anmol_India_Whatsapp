@@ -5,13 +5,15 @@ const User = require('../models/user.model');
 // Access token for your app
 const token = process.env.WHATSAPP_TOKEN;
 
-function sendMessage(phone_number_id, to, text) {
+function sendMessage(phone_number_id, to, type, content) {
 	return facebookAxios.post(
 		'/' + phone_number_id + '/messages?access_token=' + token,
 		{
 			messaging_product: 'whatsapp',
+			recipient_type: 'individual',
 			to: to,
-			text: { body: text },
+			type: type,
+			[type]: content,
 		}
 	);
 }
@@ -48,10 +50,15 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 				// send a welcome message
 
-				await sendMessage(phone_number_id, from, 'Welcome to our service!');
+				await sendMessage(
+					phone_number_id,
+					from,
+					'text',
+					'Welcome to our service!'
+				);
 
 				// send a message to ask for the user's name
-				await sendMessage(phone_number_id, from, 'What is your name?');
+				await sendMessage(phone_number_id, from, 'text', 'What is your name?');
 			}
 
 			if (user && !user.name) {
@@ -60,7 +67,12 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				await User.findOneAndUpdate({ phone: from }, { name: msg_body });
 
 				// send a message to ask for company name
-				await sendMessage(phone_number_id, from, 'What is your company name?');
+				await sendMessage(
+					phone_number_id,
+					from,
+					'text',
+					'What is your company name?'
+				);
 			}
 
 			if (user && user.name && !user.company) {
@@ -71,8 +83,36 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				await sendMessage(
 					phone_number_id,
 					from,
+					'text',
 					`Thanks ${user.name} for providing the information!`
 				);
+
+				// send a button message to ask placeing bid type (buy or sell)
+
+				await sendMessage(phone_number_id, from, 'interactive', {
+					type: 'button',
+					body: {
+						text: 'What type of bid do you want to place?',
+					},
+					action: {
+						buttons: [
+							{
+								type: 'reply',
+								reply: {
+									id: 'BUY',
+									title: 'Buy',
+								},
+							},
+							{
+								type: 'reply',
+								reply: {
+									id: 'SELL',
+									title: 'Sell',
+								},
+							},
+						],
+					},
+				});
 			}
 		}
 
