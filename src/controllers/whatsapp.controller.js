@@ -143,10 +143,12 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 				if (bids.length === 0) {
 					// add bid
-					await Bid.create({
+					let newBid = await Bid.create({
 						user: user._id,
 						type: msg_body,
 					});
+
+					bids.push(newBid);
 				}
 
 				if (bids.length > 0 && !bids[0].coal) {
