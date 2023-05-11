@@ -91,7 +91,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				});
 			}
 
-			if (user && user.name && !user.company) {
+			if (user && user.name && !user.companyName) {
 				// update the user's company
 				user = await User.findOneAndUpdate(
 					{ phone: from },
