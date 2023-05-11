@@ -1,8 +1,20 @@
 const facebookAxios = require('../axios/facebook');
 const catchAsync = require('../utils/catchAsync');
+const User = require('../models/user.model');
 
 // Access token for your app
 const token = process.env.WHATSAPP_TOKEN;
+
+function sendMessage(phone_number_id, to, text) {
+	return facebookAxios.post(
+		'/' + phone_number_id + '/messages?access_token=' + token,
+		{
+			messaging_product: 'whatsapp',
+			to: from,
+			text: { body: 'Welcome to our service!' },
+		}
+	);
+}
 
 // Accepts POST requests at /webhook endpoint
 exports.postWebhook = catchAsync(async (req, res) => {
@@ -26,15 +38,53 @@ exports.postWebhook = catchAsync(async (req, res) => {
 			let from = req.body.entry[0].changes[0].value.messages[0].from; // extract the phone number from the webhook payload
 			let msg_body = req.body.entry[0].changes[0].value.messages[0].text.body; // extract the message text from the webhook payload
 
-			facebookAxios.post(
-				'/' + phone_number_id + '/messages?access_token=' + token,
-				{
-					messaging_product: 'whatsapp',
-					to: from,
-					text: { body: 'Ack: ' + msg_body },
-				}
-			);
+			const user = await User.findOne({ phone: from });
+
+			if (!user) {
+				// create a new user
+				await User.create({
+					phone: from,
+				});
+
+				// send a welcome message
+
+				await sendMessage(phone_number_id, from, 'Welcome to our service!');
+
+				// send a message to ask for the user's name
+				await sendMessage(phone_number_id, from, 'What is your name?');
+			}
+
+			if (user && !user.name) {
+				// update the user's name
+
+				await User.findOneAndUpdate({ phone: from }, { name: msg_body });
+
+				// send a message to ask for company name
+				await sendMessage(phone_number_id, from, 'What is your company name?');
+			}
+
+			if (user && user.name && !user.company) {
+				// update the user's company
+				await User.findOneAndUpdate({ phone: from }, { company: msg_body });
+
+				// send a thank you message for providing the information
+				await sendMessage(
+					phone_number_id,
+					from,
+					`Thanks ${user.name} for providing the information!`
+				);
+			}
 		}
+
+		// 	await facebookAxios.post(
+		// 		'/' + phone_number_id + '/messages?access_token=' + token,
+		// 		{
+		// 			messaging_product: 'whatsapp',
+		// 			to: from,
+		// 			text: { body: 'Ack: ' + msg_body },
+		// 		}
+		// 	);
+		// }
 		res.sendStatus(200);
 	} else {
 		// Return a '404 Not Found' if event is not from a WhatsApp API
