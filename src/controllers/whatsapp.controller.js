@@ -11,7 +11,7 @@ function sendMessage(phone_number_id, to, text) {
 		{
 			messaging_product: 'whatsapp',
 			to: to,
-			text,
+			text: { body: text },
 		}
 	);
 }
