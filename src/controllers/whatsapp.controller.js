@@ -1,6 +1,8 @@
 const facebookAxios = require('../axios/facebook');
 const catchAsync = require('../utils/catchAsync');
 const User = require('../models/user.model');
+const Bid = require('../models/bid.model');
+const Vessel = require('../models/vessel.model');
 
 // Access token for your app
 const token = process.env.WHATSAPP_TOKEN;
@@ -38,9 +40,24 @@ exports.postWebhook = catchAsync(async (req, res) => {
 			let phone_number_id =
 				req.body.entry[0].changes[0].value.metadata.phone_number_id;
 			let from = req.body.entry[0].changes[0].value.messages[0].from; // extract the phone number from the webhook payload
-			let msg_body = req.body.entry[0].changes[0].value.messages[0].text.body; // extract the message text from the webhook payload
+			let msg_body;
 
-			const user = await User.findOne({ phone: from });
+			if (req.body.entry[0].changes[0].value.messages[0].type === 'text') {
+				msg_body = req.body.entry[0].changes[0].value.messages[0].text.body;
+			} else if (
+				req.body.entry[0].changes[0].value.messages[0].type === 'interactive'
+			) {
+				if (
+					req.body.entry[0].changes[0].value.messages[0].interactive.type ===
+					'button_reply'
+				) {
+					msg_body =
+						req.body.entry[0].changes[0].value.messages[0].interactive
+							.button_reply.id;
+				}
+			}
+
+			let user = await User.findOne({ phone: from });
 
 			if (!user) {
 				// create a new user
@@ -65,7 +82,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 			if (user && !user.name) {
 				// update the user's name
 
-				await User.findOneAndUpdate({ phone: from }, { name: msg_body });
+				user = await User.findOneAndUpdate({ phone: from }, { name: msg_body });
 
 				// send a message to ask for company name
 				await sendMessage(phone_number_id, from, 'text', {
@@ -111,17 +128,53 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					},
 				});
 			}
-		}
 
-		// 	await facebookAxios.post(
-		// 		'/' + phone_number_id + '/messages?access_token=' + token,
-		// 		{
-		// 			messaging_product: 'whatsapp',
-		// 			to: from,
-		// 			text: { body: 'Ack: ' + msg_body },
-		// 		}
-		// 	);
-		// }
+			if (user && user.name && user.company) {
+				// check if the user has placed a bid before
+				let bids = await Bid.find({ user: user._id });
+
+				if (bids.length === 0) {
+					// add bid
+					await Bid.create({
+						user: user._id,
+						type: msg_body,
+					});
+				}
+
+				if (bids.length > 0 && !bids[0].coal) {
+					let vessels = await Vessel.find({});
+
+					await sendMessage(phone_number_id, from, 'interactive', {
+						type: 'list',
+						header: {
+							type: 'text',
+							text: 'Selct Vessel',
+						},
+						body: {
+							text: 'Select any vessel from the list',
+						},
+						footer: {
+							text: 'Powered by CoalMantra',
+						},
+						action: {
+							button: 'Show Vessels',
+							sections: [
+								{
+									title: 'All Vessels',
+									rows: vessels.map((vessel) => {
+										return {
+											id: vessel._id,
+											title: vessel.name,
+											description: vessel.name,
+										};
+									}),
+								},
+							],
+						},
+					});
+				}
+			}
+		}
 		res.sendStatus(200);
 	} else {
 		// Return a '404 Not Found' if event is not from a WhatsApp API

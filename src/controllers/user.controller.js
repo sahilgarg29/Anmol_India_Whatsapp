@@ -3,6 +3,6 @@ const handlerFactory = require('../utils/handlerFactory');
 
 exports.getAllUsers = handlerFactory.getAll(User, 'name');
 exports.createUser = handlerFactory.createOne(User);
-exports.getUser = handlerFactory.getOne(User, 'name');
-exports.updateUser = handlerFactory.updateOne(User, 'name');
+exports.getUser = handlerFactory.getOne(User);
+exports.updateUser = handlerFactory.updateOne(User);
 exports.deleteUser = handlerFactory.deleteOne(User);
