@@ -10,8 +10,8 @@ function sendMessage(phone_number_id, to, text) {
 		'/' + phone_number_id + '/messages?access_token=' + token,
 		{
 			messaging_product: 'whatsapp',
-			to: from,
-			text: { body: 'Welcome to our service!' },
+			to: to,
+			text,
 		}
 	);
 }
