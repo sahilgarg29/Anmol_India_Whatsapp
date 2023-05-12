@@ -190,9 +190,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 					user.stage = 'Vessels';
 					await user.save();
-				}
-
-				if (user.stage === 'Vessels') {
+				} else if (user.stage === 'Vessels') {
 					let coal = await Coal.findOne({
 						vessel: msg_body,
 					}).populate('port vessel country');
@@ -205,8 +203,12 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					} else {
 						await sendMessage(phone_number_id, from, 'text', {
 							preview_url: false,
-							body: `Port - ${coal.port.name}\n\n
-              COuntry - ${coal.country.name}\n\Indicative Price - ${coal.indicativePrice}\n\n}`,
+							body: `Port - ${coal.port.name}\n
+              Country - ${coal.country.name}\n
+              Indicative Price - ${coal.indicativePrice}\n
+              Price Range - ${coal.priceRange}% +/-\n
+              Minimum Order Quantity - ${coal.minQuantity}\n
+              Maximum Order Quantity - ${coal.maxQuantity}\n`,
 						});
 					}
 				}
