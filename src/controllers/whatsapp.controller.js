@@ -54,6 +54,10 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					msg_body =
 						req.body.entry[0].changes[0].value.messages[0].interactive
 							.button_reply.id;
+				} else {
+					msg_body =
+						req.body.entry[0].changes[0].value.messages[0].interactive
+							.list_reply.id;
 				}
 			}
 
