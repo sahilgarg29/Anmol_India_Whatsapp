@@ -81,9 +81,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					preview_url: false,
 					body: 'What is your name?',
 				});
-			}
-
-			if (user && !user.name) {
+			}else if (user && !user.name) {
 				// update the user's name
 
 				user = await User.findOneAndUpdate(
