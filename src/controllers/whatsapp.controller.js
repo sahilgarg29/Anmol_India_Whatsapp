@@ -190,27 +190,27 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 					user.stage = 'Vessels';
 					await user.save();
-				} else if (user.stage === 'Vessels') {
-					let coal = await Coal.findOne({
-						vessel: msg_body,
-					}).populate('port vessel country');
+				}
+			} else if (user.stage === 'Vessels') {
+				let coal = await Coal.findOne({
+					vessel: msg_body,
+				}).populate('port vessel country');
 
-					if (!coal) {
-						await sendMessage(phone_number_id, from, 'text', {
-							preview_url: false,
-							body: `No coal available for the selected vessel`,
-						});
-					} else {
-						await sendMessage(phone_number_id, from, 'text', {
-							preview_url: false,
-							body: `Port - ${coal.port.name}\n
-              Country - ${coal.country.name}\n
-              Indicative Price - ${coal.indicativePrice}\n
-              Price Range - ${coal.priceRange}% +/-\n
-              Minimum Order Quantity - ${coal.minQuantity}\n
-              Maximum Order Quantity - ${coal.maxQuantity}\n`,
-						});
-					}
+				if (!coal) {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `No coal available for the selected vessel`,
+					});
+				} else {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Port - ${coal.port.name}\n
+            Country - ${coal.country.name}\n
+            Indicative Price - ${coal.indicativePrice}\n
+            Price Range - ${coal.priceRange}% +/-\n
+            Minimum Order Quantity - ${coal.minQuantity}\n
+            Maximum Order Quantity - ${coal.maxQuantity}\n`,
+					});
 				}
 			}
 		}
