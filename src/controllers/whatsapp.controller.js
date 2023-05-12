@@ -137,7 +137,12 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						],
 					},
 				});
-			} else if (user && user.name && user.companyName) {
+			} else if (
+				user &&
+				user.name &&
+				user.companyName &&
+				user.stage !== 'Vessels'
+			) {
 				// check if the user has placed a bid before
 				let bids = await Bid.find({ user: user._id });
 
