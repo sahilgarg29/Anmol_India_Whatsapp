@@ -30,9 +30,14 @@ const coalSchema = new mongoose.Schema(
 			type: Number,
 			required: [true, 'Indicative price is required'],
 		},
-		priceRange: {
+		minPrice: {
 			type: Number,
-			required: [true, 'Price range is required'],
+			required: [true, 'Minimum price is required'],
+		},
+
+		maxPrice: {
+			type: Number,
+			required: [true, 'Maximum price is required'],
 		},
 		description: {
 			type: String,

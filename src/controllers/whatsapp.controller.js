@@ -209,13 +209,24 @@ exports.postWebhook = catchAsync(async (req, res) => {
 							body: `You have already placed a bid for selected vessel`,
 						});
 					} else {
+						// update the bid with coal details
+						let bid = await Bid.findOneAndUpdate(
+							{ user: user._id, status: 'partial' },
+							{ coal: coal._id },
+							{ new: true }
+						);
+
 						// send message to show coal details
 						await sendMessage(phone_number_id, from, 'text', {
 							preview_url: false,
 							body: `Port - ${coal.port.name}\n
             Country - ${coal.country.name}\n
             Indicative Price - ${coal.indicativePrice}\n
-            Price Range - ${coal.priceRange}% +/-\n
+						${
+							bid.type === 'BUY'
+								? 'Minimum Price - ' + coal.minPrice
+								: 'Maximum Price - ' + coal.maxPrice
+						}\n
             Minimum Order Quantity - ${coal.minQuantity}\n
             Maximum Order Quantity - ${coal.maxQuantity}\n`,
 						});
@@ -231,11 +242,70 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					}
 				}
 			} else if (user.stage === 'quanitity') {
+				let bid = await Bid.findOne({
+					user: user._id,
+					status: 'partial',
+				}).populate('coal');
+
 				if (isNaN(msg_body)) {
 					await sendMessage(phone_number_id, from, 'text', {
 						preview_url: false,
 						body: `Please enter a valid quantity`,
 					});
+				} else if (
+					msg_body < bid.coal.minQuantity ||
+					msg_body > bid.coal.maxQuantity
+				) {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please enter a quantity between ${bid.coal.minQuantity} and ${bid.coal.maxQuantity}`,
+					});
+				} else {
+					bid.quantity = msg_body;
+					await bid.save();
+
+					// send message to ask for price
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `At what price do you want to place the bid?`,
+					});
+
+					user.stage = 'price';
+					await user.save();
+				}
+			} else if (user.stage === 'price') {
+				let bid = await Bid.findOne({
+					user: user._id,
+					status: 'partial',
+				}).populate('coal');
+
+				if (isNaN(msg_body)) {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please enter a valid price`,
+					});
+				} else if (bid.type === 'BUY' && msg_body < bid.coal.minPrice) {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please enter a price greater than ${bid.coal.minPrice}`,
+					});
+				} else if (bid.type === 'SELL' && msg_body > bid.coal.maxPrice) {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please enter a price less than ${bid.coal.maxPrice}`,
+					});
+				} else {
+					bid.price = msg_body;
+					await bid.save();
+
+					// send message to ask for price
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Your bid has been placed successfully`,
+					});
+
+					user.stage = 'bidType';
+					await user.save();
 				}
 			}
 		}
