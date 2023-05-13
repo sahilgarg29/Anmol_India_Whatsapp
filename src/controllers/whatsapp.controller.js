@@ -200,7 +200,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					// find bids for the user which are not pending
 					let bids = await Bid.find({
 						user: user._id,
-						status: { $ne: 'pending' },
+						status: 'pending',
 					});
 
 					if (bids.length > 0) {
