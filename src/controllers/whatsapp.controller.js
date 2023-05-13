@@ -65,7 +65,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 			if (!user) {
 				// create a new user
-				await User.create({
+				user = await User.create({
 					phone: from,
 				});
 
@@ -81,9 +81,10 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					preview_url: false,
 					body: 'What is your name?',
 				});
-			}
 
-			if (user && !user.name) {
+				user.stage = 'name';
+				await user.save();
+			} else if (user.stage === 'name') {
 				// update the user's name
 
 				user = await User.findOneAndUpdate(
@@ -97,7 +98,10 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					preview_url: false,
 					body: `Hi ${user.name}, what is your company name?`,
 				});
-			} else if (user && user.name && !user.companyName) {
+
+				user.stage = 'companyName';
+				await user.save();
+			} else if (user.stage === 'companyName') {
 				// update the user's company
 				user = await User.findOneAndUpdate(
 					{ phone: from },
@@ -137,60 +141,51 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						],
 					},
 				});
-			} else if (
-				user &&
-				user.name &&
-				user.companyName &&
-				user.stage !== 'Vessels'
-			) {
-				// check if the user has placed a bid before
-				let bids = await Bid.find({ user: user._id });
 
-				if (bids.length === 0) {
-					// add bid
-					let newBid = await Bid.create({
-						user: user._id,
-						type: msg_body,
-					});
+				user.stage = 'bidType';
+				await user.save();
+			} else if (user.stage === 'bidType') {
+				let bid = await Bid.create({
+					user: user._id,
+					type: msg_body,
+				});
 
-					bids.push(newBid);
-				}
+				user.currentBid = bid._id;
+				await user.save();
 
-				if (bids.length > 0 && !bids[0].coal) {
-					let vessels = await Vessel.find({});
+				let vessels = await Vessel.find({});
 
-					await sendMessage(phone_number_id, from, 'interactive', {
-						type: 'list',
-						header: {
-							type: 'text',
-							text: 'Selct Vessel',
-						},
-						body: {
-							text: 'Select any vessel from the list',
-						},
-						footer: {
-							text: 'Powered by CoalMantra',
-						},
-						action: {
-							button: 'Show Vessels',
-							sections: [
-								{
-									title: 'All Vessels',
-									rows: vessels.map((vessel) => {
-										return {
-											id: vessel._id,
-											title: vessel.name,
-											description: vessel.name,
-										};
-									}),
-								},
-							],
-						},
-					});
+				await sendMessage(phone_number_id, from, 'interactive', {
+					type: 'list',
+					header: {
+						type: 'text',
+						text: 'Selct Vessel',
+					},
+					body: {
+						text: 'Select any vessel from the list',
+					},
+					footer: {
+						text: 'Powered by CoalMantra',
+					},
+					action: {
+						button: 'Show Vessels',
+						sections: [
+							{
+								title: 'All Vessels',
+								rows: vessels.map((vessel) => {
+									return {
+										id: vessel._id,
+										title: vessel.name,
+										description: vessel.name,
+									};
+								}),
+							},
+						],
+					},
+				});
 
-					user.stage = 'Vessels';
-					await user.save();
-				}
+				user.stage = 'Vessels';
+				await user.save();
 			} else if (user.stage === 'Vessels') {
 				let coal = await Coal.findOne({
 					vessel: msg_body,
@@ -202,14 +197,44 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						body: `No coal available for the selected vessel`,
 					});
 				} else {
-					await sendMessage(phone_number_id, from, 'text', {
-						preview_url: false,
-						body: `Port - ${coal.port.name}\n
+					// find bids for the user which are not pending
+					let bids = await Bid.find({
+						user: user._id,
+						status: { $ne: 'pending' },
+					});
+
+					if (bids.length > 0) {
+						await sendMessage(phone_number_id, from, 'text', {
+							preview_url: false,
+							body: `You have already placed a bid for selected vessel`,
+						});
+					} else {
+						// send message to show coal details
+						await sendMessage(phone_number_id, from, 'text', {
+							preview_url: false,
+							body: `Port - ${coal.port.name}\n
             Country - ${coal.country.name}\n
             Indicative Price - ${coal.indicativePrice}\n
             Price Range - ${coal.priceRange}% +/-\n
             Minimum Order Quantity - ${coal.minQuantity}\n
             Maximum Order Quantity - ${coal.maxQuantity}\n`,
+						});
+
+						// send message to ask for quantity
+						await sendMessage(phone_number_id, from, 'text', {
+							preview_url: false,
+							body: `How much quantity do you want to order?`,
+						});
+
+						user.stage = 'quanitity';
+						await user.save();
+					}
+				}
+			} else if (user.stage === 'quanitity') {
+				if (isNaN(msg_body)) {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please enter a valid quantity`,
 					});
 				}
 			}

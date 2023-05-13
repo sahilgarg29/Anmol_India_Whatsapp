@@ -26,6 +26,11 @@ const userSchema = new mongoose.Schema(
 			default: 'customer',
 		},
 
+		currentBid: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'Bid',
+		},
+
 		stage: {
 			type: String,
 			enum: [
