@@ -120,6 +120,8 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						},
 					});
 				}
+
+				return res.sendStatus(200);
 			}
 
 			if (user.stage === 'name') {
