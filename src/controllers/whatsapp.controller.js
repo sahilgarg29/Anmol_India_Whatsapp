@@ -64,27 +64,65 @@ exports.postWebhook = catchAsync(async (req, res) => {
 			let user = await User.findOne({ phone: from });
 
 			if (!user) {
-				// create a new user
 				user = await User.create({
 					phone: from,
 				});
 
-				// send a welcome message
-
-				await sendMessage(phone_number_id, from, 'text', {
-					preview_url: false,
-					body: 'Welcome to the WhatsApp bot!',
-				});
-
-				// send a message to ask for the user's name
-				await sendMessage(phone_number_id, from, 'text', {
-					preview_url: false,
-					body: 'What is your name?',
-				});
-
 				user.stage = 'name';
-				await user.save();
-			} else if (user.stage === 'name') {
+			}
+
+			let msg = msg_body.toLowerCase();
+
+			if (msg === 'hi' || msg === 'hello' || msg === 'hey' || msg === 'hola') {
+				// send a welcome message
+				await sendMessage(phone_number_id, from, 'text', {
+					preview_url: false,
+					body: 'Hi there! Welcome to the Coal Trading Bot!',
+				});
+
+				if (user.stage === 'name') {
+					// send a message to ask for the user's name
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: 'What is your name?',
+					});
+				} else if (user.stage === 'companyName') {
+					// send a message to ask for the user's name
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Hi ${user.name}, what is your company name?`,
+					});
+				} else {
+					user.stage = 'bidType';
+					await user.save();
+					await sendMessage(phone_number_id, from, 'interactive', {
+						type: 'button',
+						body: {
+							text: 'What type of bid do you want to place?',
+						},
+						action: {
+							buttons: [
+								{
+									type: 'reply',
+									reply: {
+										id: 'BUY',
+										title: 'Buy',
+									},
+								},
+								{
+									type: 'reply',
+									reply: {
+										id: 'SELL',
+										title: 'Sell',
+									},
+								},
+							],
+						},
+					});
+				}
+			}
+
+			if (user.stage === 'name') {
 				// update the user's name
 
 				user = await User.findOneAndUpdate(
