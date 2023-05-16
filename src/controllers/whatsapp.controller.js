@@ -1,3 +1,4 @@
+require('dotenv').config();
 const facebookAxios = require('../axios/facebook');
 const catchAsync = require('../utils/catchAsync');
 const User = require('../models/user.model');
@@ -25,10 +26,8 @@ exports.postWebhook = catchAsync(async (req, res) => {
 	// Parse the request body from the POST
 	let body = req.body;
 
-	// Check the Incoming webhook message
-	console.log(JSON.stringify(req.body, null, 2));
+	console.log(JSON.stringify(body, null, 2));
 
-	// info on WhatsApp text message payload: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/payload-examples#text-messages
 	if (req.body.object) {
 		if (
 			req.body.entry &&
@@ -37,6 +36,8 @@ exports.postWebhook = catchAsync(async (req, res) => {
 			req.body.entry[0].changes[0].value.messages &&
 			req.body.entry[0].changes[0].value.messages[0]
 		) {
+			console.log('Webhook called');
+
 			let phone_number_id =
 				req.body.entry[0].changes[0].value.metadata.phone_number_id;
 			let from = req.body.entry[0].changes[0].value.messages[0].from; // extract the phone number from the webhook payload
@@ -61,7 +62,23 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				}
 			}
 
+			console.log('from ' + from);
+			console.log('msg_body ' + msg_body);
+			console.log(
+				'message_id ' + req.body.entry[0].changes[0].value.messages[0].id
+			);
+
+			await facebookAxios.post(
+				'/' + phone_number_id + '/messages?access_token=' + token,
+				{
+					messaging_product: 'whatsapp',
+					status: 'read',
+					message_id: req.body.entry[0].changes[0].value.messages[0].id,
+				}
+			);
+
 			let user = await User.findOne({ phone: from });
+			// console.log(user);
 
 			if (!user) {
 				user = await User.create({
@@ -69,11 +86,19 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				});
 
 				user.stage = 'name';
+				await user.save();
 			}
 
 			let msg = msg_body.toLowerCase();
 
-			if (msg === 'hi' || msg === 'hello' || msg === 'hey' || msg === 'hola') {
+			if (
+				msg === 'hi' ||
+				msg === 'hello' ||
+				msg === 'hey' ||
+				msg === 'hola' ||
+				msg === 'hii' ||
+				msg === 'hiii'
+			) {
 				// send a welcome message
 				await sendMessage(phone_number_id, from, 'text', {
 					preview_url: false,
@@ -126,6 +151,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 			if (user.stage === 'name') {
 				// update the user's name
+				console.log('updating user name');
 
 				user = await User.findOneAndUpdate(
 					{ phone: from },
@@ -185,6 +211,8 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				user.stage = 'bidType';
 				await user.save();
 			} else if (user.stage === 'bidType') {
+				await Bid.deleteMany({ user: user._id, status: 'partial' });
+
 				let bid = await Bid.create({
 					user: user._id,
 					type: msg_body,
@@ -192,6 +220,25 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 				user.currentBid = bid._id;
 				await user.save();
+
+				let coals = await Coal.find({ bidding: true }).populate(
+					'country port vessel'
+				);
+
+				let countries = coals.map((coal) => {
+					return coal.country.name;
+				});
+
+				countries = [...new Set(countries)];
+
+				countries = countries.map((country) => {
+					return {
+						name: country,
+						vessels: coals.filter((coal) => {
+							return coal.country.name === country;
+						}),
+					};
+				});
 
 				let vessels = await Vessel.find({});
 
@@ -209,18 +256,18 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					},
 					action: {
 						button: 'Show Vessels',
-						sections: [
-							{
-								title: 'All Vessels',
-								rows: vessels.map((vessel) => {
+						sections: countries.map((country) => {
+							return {
+								title: country.name,
+								rows: country.vessels.map((coal) => {
 									return {
-										id: vessel._id,
-										title: vessel.name,
-										description: vessel.name,
+										id: coal.vessel._id,
+										title: coal.vessel.name,
+										description: `${coal.port.name}`,
 									};
 								}),
-							},
-						],
+							};
+						}),
 					},
 				});
 
@@ -241,6 +288,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					let bids = await Bid.find({
 						user: user._id,
 						status: 'pending',
+						coal: coal._id,
 					});
 
 					if (bids.length > 0) {
@@ -259,22 +307,24 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						// send message to show coal details
 						await sendMessage(phone_number_id, from, 'text', {
 							preview_url: false,
-							body: `Port - ${coal.port.name}\n
-            Country - ${coal.country.name}\n
-            Indicative Price - ${coal.indicativePrice}\n
-						${
-							bid.type === 'BUY'
-								? 'Minimum Price - ' + coal.minPrice
-								: 'Maximum Price - ' + coal.maxPrice
-						}\n
-            Minimum Order Quantity - ${coal.minQuantity}\n
-            Maximum Order Quantity - ${coal.maxQuantity}\n`,
+							body: `
+							Port - *${coal.port.name.toUpperCase()}*\nCountry - ${
+								coal.country.name
+							}\nVessel - ${coal.vessel.name}\n\nIndicative Price - *Rs. ${
+								coal.indicativePrice
+							}*\n${
+								bid.type === 'BUY'
+									? 'Minimum Price - *Rs. ' + coal.minPrice + '*'
+									: 'Maximum Price - *Rs.' + coal.maxPrice + '*'
+							}\n\nMinimum Order Quantity - *${
+								coal.minQuantity
+							}MT*\nMaximum Order Quantity - *${coal.maxQuantity}MT*`,
 						});
 
 						// send message to ask for quantity
 						await sendMessage(phone_number_id, from, 'text', {
 							preview_url: false,
-							body: `How much quantity do you want to order?`,
+							body: `How much *Quantity* do you want to order?`,
 						});
 
 						user.stage = 'quanitity';
@@ -286,6 +336,11 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					user: user._id,
 					status: 'partial',
 				}).populate('coal');
+
+				// if mt or MT or Mt is present in the message body, remove it
+				if (msg_body.toLowerCase().includes('mt')) {
+					msg_body = msg_body.toLowerCase().replace('mt', '').trim();
+				}
 
 				if (isNaN(msg_body)) {
 					await sendMessage(phone_number_id, from, 'text', {
@@ -317,7 +372,12 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				let bid = await Bid.findOne({
 					user: user._id,
 					status: 'partial',
-				}).populate('coal');
+				}).populate({
+					path: 'coal',
+					populate: {
+						path: 'country port vessel',
+					},
+				});
 
 				if (isNaN(msg_body)) {
 					await sendMessage(phone_number_id, from, 'text', {
@@ -338,7 +398,35 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					bid.price = msg_body;
 					await bid.save();
 
-					// send message to ask for price
+					// send message to show bid details
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Port - *${bid.coal.port.name.toUpperCase()}*\nCountry - *${bid.coal.country.name.toUpperCase()}*\nVessel - *${bid.coal.vessel.name.toUpperCase()}*\n\nBid Type - *${bid.type.toUpperCase()}*\nQuantity - *${
+							bid.quantity
+						}MT*\nPrice - *Rs. ${bid.price}*\n
+						`,
+					});
+
+					// send message to type "Yes" to confirm bid
+					//and type "change" to change bid bid
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please type "Yes" to confirm bid.`,
+					});
+
+					user.stage = 'confirm';
+					await user.save();
+				}
+			} else if (user.stage === 'confirm') {
+				if (msg_body.toLowerCase() === 'yes') {
+					let bid = await Bid.findOne({
+						user: user._id,
+						status: 'partial',
+					}).populate('coal');
+
+					bid.status = 'pending';
+					await bid.save();
+
 					await sendMessage(phone_number_id, from, 'text', {
 						preview_url: false,
 						body: `Your bid has been placed successfully`,
@@ -346,18 +434,24 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 					user.stage = 'bidType';
 					await user.save();
+				} else if (msg_body.toLowerCase() === 'change') {
+					user.stage = 'bidType';
+					await user.save();
+				} else {
+					await sendMessage(phone_number_id, from, 'text', {
+						preview_url: false,
+						body: `Please type "Yes" to confirm bid`,
+					});
 				}
 			}
 		}
-		res.sendStatus(200);
+
+		return res.sendStatus(200);
 	} else {
 		// Return a '404 Not Found' if event is not from a WhatsApp API
 		res.sendStatus(404);
 	}
 });
-
-// Accepts GET requests at the /webhook endpoint. You need this URL to setup webhook initially.
-// info on verification request payload: https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verification-requests
 
 exports.getWebhook = catchAsync(async (req, res) => {
 	/**

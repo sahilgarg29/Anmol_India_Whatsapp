@@ -25,12 +25,6 @@ const userSchema = new mongoose.Schema(
 			enum: ['customer', 'admin'],
 			default: 'customer',
 		},
-
-		currentBid: {
-			type: mongoose.Schema.Types.ObjectId,
-			ref: 'Bid',
-		},
-
 		stage: {
 			type: String,
 			enum: [
@@ -42,7 +36,7 @@ const userSchema = new mongoose.Schema(
 				'details',
 				'quanitity',
 				'price',
-				'confirmation',
+				'confirm',
 			],
 			default: 'start',
 		},

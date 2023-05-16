@@ -46,6 +46,12 @@ const coalSchema = new mongoose.Schema(
 			type: Boolean,
 			default: false,
 		},
+		NAR: {
+			type: Number,
+		},
+		GAR: {
+			type: Number,
+		},
 	},
 	{ timestamps: true, versionKey: false }
 );
