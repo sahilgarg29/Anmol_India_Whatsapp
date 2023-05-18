@@ -263,7 +263,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 									return {
 										id: coal.vessel._id,
 										title: coal.vessel.name,
-										description: `${coal.port.name}`,
+										description: `Port - ${coal.port.name}`,
 									};
 								}),
 							};
@@ -278,7 +278,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					vessel: msg_body,
 				}).populate('port vessel country');
 
-				if (!coal) {
+				if (!coal || !coal.bidding) {
 					await sendMessage(phone_number_id, from, 'text', {
 						preview_url: false,
 						body: `No coal available for the selected vessel`,

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
 	{
@@ -6,9 +7,6 @@ const userSchema = new mongoose.Schema(
 			type: String,
 		},
 		companyName: {
-			type: String,
-		},
-		email: {
 			type: String,
 		},
 
@@ -43,5 +41,28 @@ const userSchema = new mongoose.Schema(
 	},
 	{ timestamps: true, versionKey: false }
 );
+
+// Instance method to check if password is correct
+userSchema.methods.correctPassword = async function (
+	candidatePassword,
+	userPassword
+) {
+	return await bcrypt.compare(candidatePassword, userPassword);
+};
+
+// Encrypt password using bcrypt
+userSchema.pre('save', async function (next) {
+	if (!this.isModified('password')) return next();
+
+	this.password = await bcrypt.hash(this.password, 12);
+
+	next();
+});
+
+// Remove password from output
+userSchema.post('save', function (doc, next) {
+	doc.password = undefined;
+	next();
+});
 
 module.exports = mongoose.model('User', userSchema);

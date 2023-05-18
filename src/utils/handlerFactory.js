@@ -7,13 +7,11 @@ exports.createOne = (Model) =>
 
 		res.status(201).json({
 			status: 'success',
-			data: {
-				data: doc,
-			},
+			data: doc,
 		});
 	});
 
-exports.getAll = (Model, searchField) =>
+exports.getAll = (Model, searchField, popOptions) =>
 	catchAsync(async (req, res, next) => {
 		let filter = {};
 
@@ -25,15 +23,16 @@ exports.getAll = (Model, searchField) =>
 			.sort()
 			.limitFields()
 			.paginate();
+
+		if (popOptions) features.query = features.query.populate(popOptions);
+
 		const doc = await features.query;
 
 		// SEND RESPONSE
 		res.status(200).json({
 			status: 'success',
 			results: doc.length,
-			data: {
-				data: doc,
-			},
+			data: doc,
 		});
 	});
 
@@ -49,9 +48,7 @@ exports.getOne = (Model, popOptions) =>
 
 		res.status(200).json({
 			status: 'success',
-			data: {
-				data: doc,
-			},
+			data: doc,
 		});
 	});
 
@@ -68,9 +65,7 @@ exports.updateOne = (Model) =>
 
 		res.status(200).json({
 			status: 'success',
-			data: {
-				data: doc,
-			},
+			data: doc,
 		});
 	});
 

@@ -1,7 +1,10 @@
 const vesselController = require('../controllers/vessel.controller');
+const { protect } = require('../controllers/auth.controller');
 
 const express = require('express');
 const router = express.Router();
+
+router.use(protect);
 
 router
 	.route('/')

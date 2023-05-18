@@ -46,6 +46,10 @@ const coalSchema = new mongoose.Schema(
 			type: Boolean,
 			default: false,
 		},
+		validity: {
+			type: Number,
+			required: [true, 'Validity is required'],
+		},
 		NAR: {
 			type: Number,
 		},
