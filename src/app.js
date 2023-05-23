@@ -9,6 +9,9 @@ const portRouter = require('./routes/port.route');
 const vesselRouter = require('./routes/vessel.route');
 const coalRouter = require('./routes/coal.route');
 const authRouter = require('./routes/auth.routes');
+const bidRouter = require('./routes/bid.routes');
+const messageRouter = require('./routes/message.routes');
+const notificationRouter = require('./routes/notification.routes');
 const cors = require('cors');
 
 app.use(cors());
@@ -20,7 +23,10 @@ app.use('/api/whatsapp', whatsappRouter);
 app.use('/api/ports', portRouter);
 app.use('/api/vessels', vesselRouter);
 app.use('/api/coals', coalRouter);
+app.use('/api/bids', bidRouter);
+app.use('/api/messages', messageRouter);
 app.use('/api', authRouter);
+app.use('/api/notifications', notificationRouter);
 
 app.all('*', (req, res, next) => {
 	next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

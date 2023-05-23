@@ -50,6 +50,12 @@ userSchema.methods.correctPassword = async function (
 	return await bcrypt.compare(candidatePassword, userPassword);
 };
 
+// remove users with role admin when getting all users
+// userSchema.pre('find', function (next) {
+// 	this.find({ role: { $ne: 'admin' } });
+// 	next();
+// });
+
 // Encrypt password using bcrypt
 userSchema.pre('save', async function (next) {
 	if (!this.isModified('password')) return next();

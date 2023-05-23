@@ -27,6 +27,9 @@ const bidSchema = new mongoose.Schema(
 			enum: ['pending', 'accepted', 'rejected', 'expired', 'partial'],
 			default: 'partial',
 		},
+		expiresAt: {
+			type: Date,
+		},
 	},
 	{ timestamps: true, versionKey: false }
 );

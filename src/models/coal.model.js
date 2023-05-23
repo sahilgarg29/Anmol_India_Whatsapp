@@ -48,7 +48,6 @@ const coalSchema = new mongoose.Schema(
 		},
 		validity: {
 			type: Number,
-			required: [true, 'Validity is required'],
 		},
 		NAR: {
 			type: Number,
@@ -57,7 +56,14 @@ const coalSchema = new mongoose.Schema(
 			type: Number,
 		},
 	},
-	{ timestamps: true, versionKey: false }
+	{ timestamps: true, versionKey: false, toJSON: { virtuals: true } }
 );
+
+// virtual field Coal name with country name and NAR value
+coalSchema.virtual('name').get(function () {
+	return `${
+		this.country.name
+	} - ${this.vessel.name} ${this.NAR ? '(' + this.NAR + 'NAR)' : ''}`;
+});
 
 module.exports = mongoose.model('Coal', coalSchema);
