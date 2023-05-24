@@ -12,6 +12,7 @@ const authRouter = require('./routes/auth.routes');
 const bidRouter = require('./routes/bid.routes');
 const messageRouter = require('./routes/message.routes');
 const notificationRouter = require('./routes/notification.routes');
+const suggestedBidRouter = require('./routes/suggestedBid.routes');
 const cors = require('cors');
 
 app.use(cors());
@@ -27,6 +28,7 @@ app.use('/api/bids', bidRouter);
 app.use('/api/messages', messageRouter);
 app.use('/api', authRouter);
 app.use('/api/notifications', notificationRouter);
+app.use('/api/suggestedBids', suggestedBidRouter);
 
 app.all('*', (req, res, next) => {
 	next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

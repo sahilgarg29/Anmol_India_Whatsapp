@@ -6,6 +6,7 @@ const Bid = require('../models/bid.model');
 const Vessel = require('../models/vessel.model');
 const Coal = require('../models/coal.model');
 const Message = require('../models/message.model');
+const SuggestedBid = require('../models/suggestedBid.model');
 const { sendMessage: sendMessageOriginal } = require('../utils/sendMessage');
 const Notification = require('../models/notification.model');
 // Access token for your app
@@ -320,6 +321,86 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				user.currentBid = bid._id;
 				await user.save();
 
+				let suggestedBids = await SuggestedBid.find({
+					type: bid.type,
+				}).populate({
+					path: 'coal',
+					populate: {
+						path: 'country port vessel',
+					},
+				});
+
+				if (suggestedBids.length > 0) {
+					await sendMessage(
+						phone_number_id,
+						from,
+						user._id,
+						botUser._id,
+						'text',
+						{
+							preview_url: false,
+							body: `Here are some suggested bids for you:`,
+						}
+					);
+
+					suggestedBids = suggestedBids.map((suggestedBid) => {
+						return sendMessage(
+							phone_number_id,
+							from,
+							user._id,
+							botUser._id,
+							'interactive',
+							{
+								type: 'button',
+								body: {
+									text: `Coal - *${suggestedBid.coal.name}*\nQuantity - *${suggestedBid.quantity} MT* \nPrice - *Rs. ${suggestedBid.price}*`,
+								},
+								action: {
+									buttons: [
+										{
+											type: 'reply',
+											reply: {
+												id: suggestedBid._id,
+												title: 'Select',
+											},
+										},
+									],
+								},
+							}
+						);
+					});
+
+					await Promise.all(suggestedBids);
+
+					// send a button message to ask for custom bid
+					await sendMessage(
+						phone_number_id,
+						from,
+						user._id,
+						botUser._id,
+						'interactive',
+						{
+							type: 'button',
+							body: {
+								text: 'Do you want to place a custom bid?',
+							},
+							action: {
+								buttons: [
+									{
+										type: 'reply',
+										reply: {
+											id: 'CUSTOM_BID',
+											title: 'Yes',
+										},
+									},
+								],
+							},
+						}
+					);
+
+					return res.sendStatus(200);
+				}
+
 				let coals = await Coal.find({ bidding: true }).populate(
 					'country port vessel'
 				);
@@ -379,6 +460,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 				user.stage = 'Vessels';
 				await user.save();
+			} else if (user.stage === 'suggestedBid') {
 			} else if (user.stage === 'Vessels') {
 				let coal = await Coal.findOne({
 					vessel: msg_body,
