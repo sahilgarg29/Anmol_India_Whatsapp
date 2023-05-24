@@ -28,11 +28,15 @@ exports.getAll = (Model, searchField, popOptions) =>
 
 		const doc = await features.query;
 
+		// count total documents
+		let total = await Model.find().countDocuments();
+
 		// SEND RESPONSE
 		res.status(200).json({
 			status: 'success',
 			results: doc.length,
 			data: doc,
+			total,
 		});
 	});
 

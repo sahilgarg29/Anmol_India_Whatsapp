@@ -368,7 +368,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 										return {
 											id: coal.vessel._id,
 											title: coal.vessel.name,
-											description: `Port - ${coal.port.name}`,
+											description: `Port - ${coal.port.name} | NAR - ${coal.NAR} | GAR - ${coal.GAR} | Indicative Price - ${coal.indicativePrice}`,
 										};
 									}),
 								};
