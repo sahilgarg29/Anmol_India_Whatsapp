@@ -1,5 +1,6 @@
 const sendErrorDev = (err, res) => {
 	console.log(err);
+	console.log(err.message);
 	res.status(err.statusCode).json({
 		status: err.status,
 		error: err,

@@ -4,14 +4,18 @@ const handlerFactory = require('../utils/handlerFactory');
 
 exports.getAllSuggestedBids = handlerFactory.getAll(SuggestedBid, '', {
 	path: 'coal',
-	select: 'vessel port country',
+	populate: {
+		path: 'vessel country port',
+	},
 });
 
 exports.createSuggestedBid = handlerFactory.createOne(SuggestedBid);
 
 exports.getSuggestedBid = handlerFactory.getOne(SuggestedBid, {
 	path: 'coal',
-	select: 'vessel port country',
+	populate: {
+		path: 'vessel country port',
+	},
 });
 
 exports.updateSuggestedBid = handlerFactory.updateOne(SuggestedBid);

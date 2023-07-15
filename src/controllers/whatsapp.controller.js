@@ -9,9 +9,9 @@ const Message = require('../models/message.model');
 const SuggestedBid = require('../models/suggestedBid.model');
 const { sendMessage: sendMessageOriginal } = require('../utils/sendMessage');
 const Notification = require('../models/notification.model');
+const WhatsAppService = require('../utils/whatsAppService');
 // Access token for your app
 const token = process.env.WHATSAPP_TOKEN;
-const io = global.io;
 
 var add_minutes = function (dt, minutes) {
 	return new Date(dt.getTime() + minutes * 60000);
@@ -21,27 +21,6 @@ var add_minutes = function (dt, minutes) {
 exports.postWebhook = catchAsync(async (req, res) => {
 	// Parse the request body from the POST
 	let body = req.body;
-
-	const sendMessage = async (
-		phone_number_id,
-		to,
-		toId,
-		fromId,
-		type,
-		content
-	) => {
-		return sendMessageOriginal(
-			phone_number_id,
-			to,
-			toId,
-			fromId,
-			type,
-			content,
-			req.app.get('socketio')
-		);
-	};
-
-	// console.log(JSON.stringify(body, null, 2));
 
 	if (req.body.object) {
 		if (
@@ -100,7 +79,6 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 			let user = await User.findOne({ phone: from });
 			let botUser = await User.findOne({ phone: '911234567890' });
-			// console.log(user);
 
 			if (!user) {
 				user = await User.create({
@@ -137,6 +115,25 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				timestamps: Date.now(),
 			});
 
+			let bid = await Bid.findOne({
+				user: user._id,
+				status: 'partial',
+			}).populate({
+				path: 'coal',
+				populate: {
+					path: 'vessel port country',
+				},
+			});
+
+			let whatsapp = new WhatsAppService(
+				token,
+				phone_number_id,
+				user,
+				botUser,
+				bid,
+				res.app.get('socketio')
+			);
+
 			let msg = msg_body.toLowerCase();
 
 			if (
@@ -147,82 +144,22 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				msg === 'hii' ||
 				msg === 'hiii'
 			) {
-				// send a welcome message
-				await sendMessage(
-					phone_number_id,
-					from,
-					user._id,
-					botUser._id,
-					'text',
-					{
-						preview_url: false,
-						body: 'Hi there! Welcome to the Coal Trading Bot!',
-					}
-				);
-
-				console.log('User stage is ' + user.stage);
+				if (user.stage === 'name' || user.stage === 'companyName') {
+					// send a welcome message
+					await whatsapp.sendWelcomeMessage();
+				} else {
+					user.stage = 'menu';
+					await user.save();
+					// send a welcome message
+					await whatsapp.sendMenuMessage();
+				}
 
 				if (user.stage === 'name') {
 					// send a message to ask for the user's name
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: 'What is your name?',
-						}
-					);
+					await whatsapp.sendAskNameMessage();
 				} else if (user.stage === 'companyName') {
 					// send a message to ask for the user's name
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Hi ${user.name}, what is your company name?`,
-						}
-					);
-				} else {
-					console.log('User stage is ' + user.stage);
-					user.stage = 'bidType';
-					await user.save();
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'interactive',
-						{
-							type: 'button',
-							body: {
-								text: 'What type of bid do you want to place?',
-							},
-							action: {
-								buttons: [
-									{
-										type: 'reply',
-										reply: {
-											id: 'BUY',
-											title: 'Buy',
-										},
-									},
-									{
-										type: 'reply',
-										reply: {
-											id: 'SELL',
-											title: 'Sell',
-										},
-									},
-								],
-							},
-						}
-					);
+					await whatsapp.sendAskCompanyMessage();
 				}
 
 				return res.sendStatus(200);
@@ -232,97 +169,61 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				// update the user's name
 				console.log('updating user name');
 
-				user = await User.findOneAndUpdate(
-					{ phone: from },
-					{ name: msg_body },
-					{ new: true }
-				);
-
-				// send a message to ask for company name
-				await sendMessage(
-					phone_number_id,
-					from,
-					user._id,
-					botUser._id,
-					'text',
-					{
-						preview_url: false,
-						body: `Hi ${user.name}, what is your company name?`,
-					}
-				);
-
+				user.name = msg_body;
 				user.stage = 'companyName';
 				await user.save();
+				// send a message to ask for company name
+				await whatsapp.sendAskCompanyMessage();
 			} else if (user.stage === 'companyName') {
 				// update the user's company
-				user = await User.findOneAndUpdate(
-					{ phone: from },
-					{ companyName: msg_body },
-					{ new: true }
-				);
+				user.companyName = msg_body;
+				user.stage = 'menu';
+				await user.save();
 
 				// send a thank you message for providing the information
-				await sendMessage(
-					phone_number_id,
-					from,
-					user._id,
-					botUser._id,
-					'text',
-					{
-						preview_url: false,
-						body: `Thank you ${user.name} for providing your company name!`,
-					}
-				);
+				await whatsapp.sendMessage('text', {
+					preview_url: false,
+					body: `Thanks ${user.name} for providing the information`,
+				});
 
 				// send a button message to ask placeing bid type (buy or sell)
+				await whatsapp.sendMenuMessage();
+			} else if (user.stage === 'menu') {
+				if (msg_body === 'PLACE_BID') {
+					user.stage = 'bidType';
+					await user.save();
+					await whatsapp.sendBidTypeMessage();
+				} else if (msg_body === 'CALL_BACK') {
+					notification = await Notification.create({
+						title: 'New Call Back Request',
+						description:
+							user.phone + ' has requested a call back on the whtsapp bot',
+						type: 'call_back',
+					});
 
-				await sendMessage(
-					phone_number_id,
-					from,
-					user._id,
-					botUser._id,
-					'interactive',
-					{
-						type: 'button',
-						body: {
-							text: 'What type of bid do you want to place?',
-						},
-						action: {
-							buttons: [
-								{
-									type: 'reply',
-									reply: {
-										id: 'BUY',
-										title: 'Buy',
-									},
-								},
-								{
-									type: 'reply',
-									reply: {
-										id: 'SELL',
-										title: 'Sell',
-									},
-								},
-							],
-						},
-					}
-				);
+					req.app.get('socketio').emit('notification', notification);
 
-				user.stage = 'bidType';
-				await user.save();
+					user.stage = 'menu';
+					await user.save();
+
+					await whatsapp.sendCallBackMessage();
+				}
 			} else if (user.stage === 'bidType') {
 				await Bid.deleteMany({ user: user._id, status: 'partial' });
 
-				let bid = await Bid.create({
+				bid = await Bid.create({
 					user: user._id,
 					type: msg_body,
 				});
 
-				user.currentBid = bid._id;
-				await user.save();
+				let pendingBids = await Bid.find({
+					user: user._id,
+					status: 'pending',
+				}).populate('coal');
 
 				let suggestedBids = await SuggestedBid.find({
 					type: bid.type,
+					isBiddable: true,
 				}).populate({
 					path: 'coal',
 					populate: {
@@ -330,360 +231,142 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					},
 				});
 
-				if (suggestedBids.length > 0) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Here are some suggested bids for you:`,
+				suggestedBids = suggestedBids.filter((suggestedBid) => {
+					let ans = pendingBids.find((pendingBid) => {
+						if (
+							pendingBid.coal._id.toString() ===
+							suggestedBid.coal._id.toString()
+						) {
+							return true;
 						}
-					);
 
-					suggestedBids = suggestedBids.map((suggestedBid) => {
-						return sendMessage(
-							phone_number_id,
-							from,
-							user._id,
-							botUser._id,
-							'interactive',
-							{
-								type: 'button',
-								body: {
-									text: `Coal - *${suggestedBid.coal.name}*\nQuantity - *${suggestedBid.quantity} MT* \nPrice - *Rs. ${suggestedBid.price}*`,
-								},
-								action: {
-									buttons: [
-										{
-											type: 'reply',
-											reply: {
-												id: suggestedBid._id,
-												title: 'Select',
-											},
-										},
-									],
-								},
-							}
-						);
+						return false;
 					});
 
-					await Promise.all(suggestedBids);
+					if (ans === undefined) {
+						return true;
+					} else {
+						return false;
+					}
+				});
 
-					// send a button message to ask for custom bid
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'interactive',
-						{
-							type: 'button',
-							body: {
-								text: 'Do you want to place a custom bid?',
-							},
-							action: {
-								buttons: [
-									{
-										type: 'reply',
-										reply: {
-											id: 'CUSTOM_BID',
-											title: 'Yes',
-										},
-									},
-								],
-							},
-						}
+				if (suggestedBids.length > 0) {
+					await whatsapp.sendTextMessage(
+						'Here are some suggested bids For you'
 					);
 
-					return res.sendStatus(200);
+					await whatsapp.sendSuggestedBidsMessage(suggestedBids);
+
+					// send a button message to ask for custom bid
+					await whatsapp.sendCustomBidMessage();
+
+					user.stage = 'suggestedBid';
+					await user.save();
+				} else {
+					// send a message to ask for coal type
+					user.stage = 'Vessels';
+					await user.save();
+					await whatsapp.sendVesselsListMessage();
 				}
-
-				let coals = await Coal.find({ bidding: true }).populate(
-					'country port vessel'
-				);
-
-				let countries = coals.map((coal) => {
-					return coal.country.name;
-				});
-
-				countries = [...new Set(countries)];
-
-				countries = countries.map((country) => {
-					return {
-						name: country,
-						vessels: coals.filter((coal) => {
-							return coal.country.name === country;
-						}),
-					};
-				});
-
-				let vessels = await Vessel.find({});
-
-				await sendMessage(
-					phone_number_id,
-					from,
-					user._id,
-					botUser._id,
-					'interactive',
-					{
-						type: 'list',
-						header: {
-							type: 'text',
-							text: 'Selct Vessel',
-						},
-						body: {
-							text: 'Select any vessel from the list',
-						},
-						footer: {
-							text: 'Powered by CoalMantra',
-						},
-						action: {
-							button: 'Show Vessels',
-							sections: countries.map((country) => {
-								return {
-									title: country.name,
-									rows: country.vessels.map((coal) => {
-										return {
-											id: coal.vessel._id,
-											title: coal.vessel.name,
-											description: `Port - ${coal.port.name} | NAR - ${coal.NAR} | GAR - ${coal.GAR} | Indicative Price - ${coal.indicativePrice}`,
-										};
-									}),
-								};
-							}),
-						},
-					}
-				);
-
-				user.stage = 'Vessels';
-				await user.save();
 			} else if (user.stage === 'suggestedBid') {
+				if (msg_body === 'CUSTOM_BID') {
+					await whatsapp.sendVesselsListMessage();
+					user.stage = 'Vessels';
+					await user.save();
+					return res.sendStatus(200);
+				} else {
+					let suggestedBid = await SuggestedBid.findOne({
+						_id: msg_body,
+					}).populate({
+						path: 'coal',
+						populate: {
+							path: 'country port vessel',
+						},
+					});
+
+					bid.coal = suggestedBid.coal._id;
+					bid.quantity = suggestedBid.quantity;
+					bid.price = suggestedBid.price;
+					await bid.save();
+
+					bid.coal = suggestedBid.coal;
+
+					// send message to show bid details
+					await whatsapp.sendBidOverviewMessage();
+
+					// send message to type "Yes" to confirm bid
+					//and type "change" to change bid bid
+					await whatsapp.sendTextMessage(
+						'Please type *Yes* to confirm the bid.'
+					);
+
+					user.stage = 'confirm';
+					await user.save();
+				}
 			} else if (user.stage === 'Vessels') {
 				let coal = await Coal.findOne({
 					vessel: msg_body,
 				}).populate('port vessel country');
+				// update the bid with coal details
 
-				if (!coal || !coal.bidding) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `No coal available for the selected vessel`,
-						}
-					);
-				} else {
-					// find bids for the user which are not pending
-					let bids = await Bid.find({
-						user: user._id,
-						status: 'pending',
-						coal: coal._id,
-					});
+				bid.coal = coal._id;
+				await bid.save();
 
-					if (bids.length > 0) {
-						await sendMessage(
-							phone_number_id,
-							from,
-							user._id,
-							botUser._id,
-							'text',
-							{
-								preview_url: false,
-								body: `You have already placed a bid for selected vessel`,
-							}
-						);
-					} else {
-						// update the bid with coal details
-						let bid = await Bid.findOneAndUpdate(
-							{ user: user._id, status: 'partial' },
-							{ coal: coal._id },
-							{ new: true }
-						);
+				bid.coal = coal;
 
-						// send message to show coal details
-						await sendMessage(
-							phone_number_id,
-							from,
-							user._id,
-							botUser._id,
-							'text',
-							{
-								preview_url: false,
-								body: `
-							Port - *${coal.port.name.toUpperCase()}*\nCountry - ${
-									coal.country.name
-								}\nVessel - ${coal.vessel.name}\n\nIndicative Price - *Rs. ${
-									coal.indicativePrice
-								}*\n${
-									bid.type === 'BUY'
-										? 'Minimum Price - *Rs. ' + coal.minPrice + '*'
-										: 'Maximum Price - *Rs.' + coal.maxPrice + '*'
-								}\n\nMinimum Order Quantity - *${
-									coal.minQuantity
-								}MT*\nMaximum Order Quantity - *${coal.maxQuantity}MT*`,
-							}
-						);
+				user.stage = 'quanitity';
+				await user.save();
 
-						// send message to ask for quantity
-						await sendMessage(
-							phone_number_id,
-							from,
-							user._id,
-							botUser._id,
-							'text',
-							{
-								preview_url: false,
-								body: `How much *Quantity* do you want to order?`,
-							}
-						);
+				// send message to show coal details
+				await whatsapp.sendCoalDetailsMessage();
 
-						user.stage = 'quanitity';
-						await user.save();
-					}
-				}
+				// send message to ask for quantity
+				await whatsapp.sendAskQuantityMessage();
 			} else if (user.stage === 'quanitity') {
-				let bid = await Bid.findOne({
-					user: user._id,
-					status: 'partial',
-				}).populate('coal');
-
 				// if mt or MT or Mt is present in the message body, remove it
 				if (msg_body.toLowerCase().includes('mt')) {
 					msg_body = msg_body.toLowerCase().replace('mt', '').trim();
 				}
 
 				if (isNaN(msg_body)) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please enter a valid quantity`,
-						}
-					);
+					await whatsapp.sendValidQuantityMessage();
 				} else if (
 					msg_body < bid.coal.minQuantity ||
 					msg_body > bid.coal.maxQuantity
 				) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please enter a quantity between ${bid.coal.minQuantity} and ${bid.coal.maxQuantity}`,
-						}
-					);
+					await whatsapp.sendValidQuantityMessage();
 				} else {
 					bid.quantity = msg_body;
 					await bid.save();
 
 					// send message to ask for price
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `At what price do you want to place the bid?`,
-						}
-					);
+					await whatsapp.sendAskPriceMessage();
 
 					user.stage = 'price';
 					await user.save();
 				}
 			} else if (user.stage === 'price') {
-				let bid = await Bid.findOne({
-					user: user._id,
-					status: 'partial',
-				}).populate({
-					path: 'coal',
-					populate: {
-						path: 'country port vessel',
-					},
-				});
-
 				if (isNaN(msg_body)) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please enter a valid price`,
-						}
-					);
+					await whatsapp.sendValidPriceMessage();
 				} else if (bid.type === 'BUY' && msg_body < bid.coal.minPrice) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please enter a price greater than ${bid.coal.minPrice}`,
-						}
+					await whatsapp.sendTextMessage(
+						'Please enter a price greater than ' + bid.coal.minPrice
 					);
 				} else if (bid.type === 'SELL' && msg_body > bid.coal.maxPrice) {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please enter a price less than ${bid.coal.maxPrice}`,
-						}
+					await whatsapp.sendTextMessage(
+						'Please enter a price less than ' + bid.coal.maxPrice
 					);
 				} else {
 					bid.price = msg_body;
 					await bid.save();
 
 					// send message to show bid details
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Port - *${bid.coal.port.name.toUpperCase()}*\nCountry - *${bid.coal.country.name.toUpperCase()}*\nVessel - *${bid.coal.vessel.name.toUpperCase()}*\n\nBid Type - *${bid.type.toUpperCase()}*\nQuantity - *${
-								bid.quantity
-							}MT*\nPrice - *Rs. ${bid.price}*\n
-						`,
-						}
-					);
+					await whatsapp.sendBidOverviewMessage();
 
 					// send message to type "Yes" to confirm bid
 					//and type "change" to change bid bid
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please type "Yes" to confirm bid.`,
-						}
+					await whatsapp.sendTextMessage(
+						'Please type *Yes* to confirm the bid.'
 					);
 
 					user.stage = 'confirm';
@@ -691,34 +374,13 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				}
 			} else if (user.stage === 'confirm') {
 				if (msg_body.toLowerCase() === 'yes') {
-					console.log('confirm');
-
-					let bid = await Bid.findOne({
-						user: user._id,
-						status: 'partial',
-					}).populate({
-						path: 'coal',
-						populate: {
-							path: 'country port vessel',
-						},
-					});
-					console.log(bid);
-
 					bid.status = 'pending';
 					console.log(bid.coal.validity);
 					bid.expiresAt = add_minutes(new Date(), bid.coal.validity);
 					await bid.save();
 
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Your bid has been placed successfully`,
-						}
+					await whatsapp.sendTextMessage(
+						'Your bid has been placed successfully.'
 					);
 
 					let notification = await Notification.create({
@@ -729,22 +391,14 @@ exports.postWebhook = catchAsync(async (req, res) => {
 
 					req.app.get('socketio').emit('notification', notification);
 
-					user.stage = 'bidType';
+					user.stage = 'menu';
 					await user.save();
 				} else if (msg_body.toLowerCase() === 'change') {
-					user.stage = 'bidType';
+					user.stage = 'menu';
 					await user.save();
 				} else {
-					await sendMessage(
-						phone_number_id,
-						from,
-						user._id,
-						botUser._id,
-						'text',
-						{
-							preview_url: false,
-							body: `Please type "Yes" to confirm bid`,
-						}
+					await whatsapp.sendTextMessage(
+						'Please type *Yes* to confirm the bid.'
 					);
 				}
 			}

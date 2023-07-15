@@ -26,6 +26,13 @@ const coalSchema = new mongoose.Schema(
 			type: Number,
 			required: [true, 'Maximum quantity is required'],
 		},
+
+		quantityUnit: {
+			type: String,
+			enum: ['MT', 'Truck'],
+			default: 'MT',
+		},
+
 		indicativePrice: {
 			type: Number,
 			required: [true, 'Indicative price is required'],
