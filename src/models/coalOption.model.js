@@ -1,25 +1,26 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const coalOptionSchema = new mongoose.Schema({
-  coals: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Coal",
-    },
-  ],
+const coalOptionSchema = new mongoose.Schema(
+	{
+		coals: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: 'Coal',
+			},
+		],
 
-  paymentTerms: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "PaymentTerm",
-    },
-  ],
+		bidding: {
+			type: Boolean,
+			default: false,
+		},
+	},
+	{
+		virtuals: true,
+	}
+);
 
-  quantityUnit: {
-    type: String,
-    enum: ["MT", "Truck"],
-    default: "MT",
-  },
+coalOptionSchema.virtual('name').get(function () {
+	return this.coals.map((coal) => coal.vessel.name).join(' or ');
 });
 
-module.exports = mongoose.model("CoalOption", coalOptionSchema);
+module.exports = mongoose.model('CoalOption', coalOptionSchema);

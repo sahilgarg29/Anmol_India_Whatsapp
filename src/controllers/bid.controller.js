@@ -13,7 +13,10 @@ exports.getAllBids = handlerFactory.getAll(Bid, 'coal', [
 	{
 		path: 'coal',
 		populate: {
-			path: 'vessel country port',
+			path: 'coals',
+			populate: {
+				path: 'country port vessel',
+			},
 		},
 	},
 ]);
