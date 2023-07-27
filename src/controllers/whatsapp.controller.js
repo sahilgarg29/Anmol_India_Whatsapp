@@ -11,6 +11,7 @@ const { sendMessage: sendMessageOriginal } = require('../utils/sendMessage');
 const Notification = require('../models/notification.model');
 const WhatsAppService = require('../utils/whatsAppService');
 const PaymentTerm = require('../models/paymentTerms.model');
+const CallbackRequest = require('../models/callbackRequest.model');
 // Access token for your app
 const token = process.env.WHATSAPP_TOKEN;
 
@@ -171,6 +172,36 @@ exports.postWebhook = catchAsync(async (req, res) => {
 				}
 
 				return res.sendStatus(200);
+			} else if (msg_body === 'CALL_BACK') {
+				const callbackRequest = await CallbackRequest.findOne({
+					user: user._id,
+					status: 'pending',
+				});
+
+				if (callbackRequest) {
+					await whatsapp.sendTextMessage(
+						'You have already requested a call back. Please wait for our team to contact you.'
+					);
+				} else {
+					await CallbackRequest.create({
+						user: user._id,
+						status: 'pending',
+					});
+					await whatsapp.sendTextMessage(
+						'Your request for a call back has been received. Our team will contact you shortly.'
+					);
+
+					let notification = await Notification.create({
+						title: 'New Call Back Request',
+						description:
+							user.phone + ' has requested a call back on the whtsapp bot',
+						type: 'call_back',
+					});
+
+					req.app.get('socketio').emit('notification', notification);
+				}
+
+				return res.sendStatus(200);
 			}
 
 			if (user.stage === 'menu') {
@@ -179,7 +210,7 @@ exports.postWebhook = catchAsync(async (req, res) => {
 					await user.save();
 					await whatsapp.sendCoalOptionsListMessage();
 				} else if (msg_body === 'CALL_BACK') {
-					notification = await Notification.create({
+					let notification = await Notification.create({
 						title: 'New Call Back Request',
 						description:
 							user.phone + ' has requested a call back on the whtsapp bot',
@@ -383,13 +414,13 @@ exports.postWebhook = catchAsync(async (req, res) => {
 						'Your bid has been placed successfully.'
 					);
 
-					// let notification = await Notification.create({
-					//   title: "Bid Placed",
-					//   description: `${user.phone} has placed a bid for ${bid.quantity}MT of ${bid.coal.name} at Rs. ${bid.price}`,
-					//   type: "new_bid",
-					// });
+					let notification = await Notification.create({
+						title: 'Bid Placed',
+						description: `${user.phone} has placed a bid for ${bid.quantity}MT of ${bid.coal.name} at Rs. ${bid.price}`,
+						type: 'new_bid',
+					});
 
-					// req.app.get("socketio").emit("notification", notification);
+					req.app.get('socketio').emit('notification', notification);
 
 					user.stage = 'menu';
 					await user.save();

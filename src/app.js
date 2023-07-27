@@ -17,6 +17,7 @@ const paymentTermRouter = require('./routes/paymentTerm.routes');
 const coalOptionRouter = require('./routes/coalOption.routes');
 const liftingPeriodRouter = require('./routes/liftingPeriod.routes');
 const suggestionRouter = require('./routes/suggestion.routes');
+const callbackRequestRouter = require('./routes/callbackRequest.routes');
 
 const cors = require('cors');
 
@@ -38,6 +39,7 @@ app.use('/api/paymentTerms', paymentTermRouter);
 app.use('/api/coalOptions', coalOptionRouter);
 app.use('/api/liftingPeriods', liftingPeriodRouter);
 app.use('/api/suggestions', suggestionRouter);
+app.use('/api/callbackRequests', callbackRequestRouter);
 
 app.all('*', (req, res, next) => {
 	next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
